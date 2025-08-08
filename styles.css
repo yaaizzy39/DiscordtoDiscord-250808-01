@@ -3,18 +3,19 @@
 .discord-webhook-button {
     background: #7289da;
     border: none;
-    border-radius: 3px;
+    border-radius: 4px;
     color: white;
     cursor: pointer;
-    font-size: 14px;
-    padding: 4px 8px;
-    margin-left: 4px;
+    font-size: 16px;
+    padding: 6px 10px;
+    margin: 2px;
     transition: all 0.2s ease;
-    min-width: 24px;
-    height: 24px;
+    min-width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .discord-webhook-button:hover:not(:disabled) {
@@ -31,10 +32,19 @@
     cursor: not-allowed;
 }
 
-.discord-webhook-button-container {
-    display: inline-flex;
-    align-items: center;
-    margin-left: 8px;
+/* オーバーレイ表示用のボタンスタイル */
+.discord-webhook-button-overlay {
+    position: absolute !important;
+    top: 4px !important;
+    right: 4px !important;
+    z-index: 100 !important;
+    margin: 0 !important;
+    padding: 4px 6px !important;
+    min-width: 28px !important;
+    height: 28px !important;
+    font-size: 14px !important;
+    opacity: 0;
+    transition: opacity 0.2s ease;
 }
 
 /* Warning Modal Styles */
@@ -142,22 +152,21 @@
     background-color: #7289da;
 }
 
-/* Integration with Discord's existing styles */
-[class*="messageListItem"] .discord-webhook-button {
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-[class*="messageListItem"]:hover .discord-webhook-button {
+/* 個別のメッセージにホバーした時のみボタンを表示 */
+[class*="messageListItem"]:hover > .discord-webhook-button-overlay {
     opacity: 1;
 }
 
-/* Ensure button doesn't interfere with Discord's layout */
-.discord-webhook-button-container {
-    position: absolute;
-    top: 0;
-    right: 8px;
-    z-index: 1;
+/* より具体的なセレクタで個別メッセージのみ対象 */
+[class*="message"]:hover > .discord-webhook-button-overlay,
+[id^="chat-messages"]:hover > .discord-webhook-button-overlay,
+[role="article"]:hover > .discord-webhook-button-overlay {
+    opacity: 1;
+}
+
+/* 親要素が相対位置指定されている場合の調整 */
+[style*="position: relative"]:hover > .discord-webhook-button-overlay {
+    opacity: 1;
 }
 
 /* Dark theme compatibility */

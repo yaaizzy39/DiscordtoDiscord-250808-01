@@ -96,23 +96,17 @@ class DiscordMessageForwarder {
 
         this.processedMessages.add(messageId);
 
-        const messageContent = messageElement.querySelector('[class*="messageContent"]');
-        if (!messageContent) return;
-
         const existingButton = messageElement.querySelector('.discord-webhook-button');
         if (existingButton) return;
 
         const button = this.createForwardButton(messageElement, messageId);
         
-        const toolbar = messageElement.querySelector('[class*="buttonContainer"]');
-        if (toolbar) {
-            toolbar.appendChild(button);
-        } else {
-            const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'discord-webhook-button-container';
-            buttonContainer.appendChild(button);
-            messageContent.appendChild(buttonContainer);
-        }
+        // 絶対位置指定でメッセージの右上に配置（空白行を作らない）
+        button.className = 'discord-webhook-button discord-webhook-button-overlay';
+        
+        // メッセージ要素に直接追加
+        messageElement.style.position = 'relative';
+        messageElement.appendChild(button);
     }
 
     getMessageId(messageElement) {
