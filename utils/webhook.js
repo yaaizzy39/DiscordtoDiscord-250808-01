@@ -100,6 +100,7 @@ class DiscordWebhookSender {
         }
 
         return {
+            content: cleanContent.length > 2000 ? cleanContent.substring(0, 1997) + "..." : cleanContent,
             embeds: [embed]
         };
     }
