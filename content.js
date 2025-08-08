@@ -162,14 +162,6 @@ class DiscordMessageForwarder {
     async handleButtonClick(messageElement, messageId) {
         try {
             const messageData = this.extractMessageData(messageElement, messageId);
-            
-            const isOwnMessage = this.isOwnMessage(messageData.author);
-            if (!isOwnMessage) {
-                const shouldProceed = await this.showWarningDialog(messageData.author);
-                if (!shouldProceed) {
-                    return;
-                }
-            }
 
             this.showLoadingIndicator(messageElement);
             
