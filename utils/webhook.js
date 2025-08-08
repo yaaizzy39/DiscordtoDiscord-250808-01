@@ -63,19 +63,29 @@ class DiscordWebhookSender {
         const cleanAuthor = author && author.trim() ? author.trim() : "Unknown User";
         const cleanServerName = serverName && serverName.trim() ? serverName.trim() : "Unknown Server";
         
-        // サーバー名と送信者名を含む形でメッセージを構成
-        const serverPrefix = `【${cleanServerName}】`;
-        const authorPrefix = `**${cleanAuthor}**`;
-        const contentWithPrefix = `${serverPrefix}\n${authorPrefix}\n${cleanContent}`;
-        
         const embed = {
-            title: "Forwarded Discord Message",
-            description: contentWithPrefix.length > 4096 ? contentWithPrefix.substring(0, 4093) + "..." : contentWithPrefix,
+            title: "📨 Forwarded Discord Message",
+            description: cleanContent.length > 4096 ? cleanContent.substring(0, 4093) + "..." : cleanContent,
             color: 0x7289da,
+            fields: [
+                {
+                    name: "🏷️ サーバー",
+                    value: `\`\`\`ansi\n\u001b[36m${cleanServerName}\u001b[0m\n\`\`\``,
+                    inline: true
+                },
+                {
+                    name: "👤 投稿者",
+                    value: `\`\`\`ansi\n\u001b[33m${cleanAuthor}\u001b[0m\n\`\`\``,
+                    inline: true
+                }
+            ],
             footer: {
                 text: "Shared via Chrome Extension"
             }
         };
+        
+        // contentフィールド用（検索用）
+        const contentWithPrefix = `【${cleanServerName}】\n**${cleanAuthor}**\n${cleanContent}`;
 
         // URLの検証
         if (messageUrl && messageUrl.startsWith('https://discord.com/channels/')) {
