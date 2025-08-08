@@ -3,6 +3,7 @@ class DiscordMessageForwarder {
         this.webhookSender = new DiscordWebhookSender();
         this.processedMessages = new Set();
         this.currentUser = null;
+        this.serverName = null;
         this.observer = null;
         
         this.init();
@@ -11,6 +12,7 @@ class DiscordMessageForwarder {
     async init() {
         await this.webhookSender.init();
         this.detectCurrentUser();
+        this.detectServerName();
         this.processExistingMessages();
         this.setupMutationObserver();
     }
@@ -33,6 +35,60 @@ class DiscordMessageForwarder {
                 }
             }
         }
+    }
+
+    detectServerName() {
+        // より具体的なサーバー名検出方法
+        const serverNameSelectors = [
+            // サイドバーの最上部にあるサーバー名
+            '[class*="sidebar"] [class*="name"]',
+            '[class*="guildSidebar"] [class*="name"]',
+            // ヘッダー部分のサーバー名
+            'h1[class*="name"]',
+            '[class*="title"][class*="name"]',
+            // サーバーアイコンの隣のテキスト
+            '[class*="guildIcon"] + [class*="name"]',
+            // サーバー選択ドロップダウン
+            '[class*="guildName"]',
+            '[class*="serverName"]',
+        ];
+        
+        for (const selector of serverNameSelectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent && element.textContent.trim()) {
+                const serverName = element.textContent.trim();
+                // 明らかにサーバー名でないものを除外
+                if (!serverName.includes('チャンネル') && !serverName.includes('channel') && serverName.length > 1) {
+                    this.serverName = serverName;
+                    console.log(`サーバー名を検出しました: ${this.serverName}`);
+                    return;
+                }
+            }
+        }
+        
+        // ページタイトルからサーバー名を推測（改良版）
+        const pageTitle = document.title;
+        if (pageTitle && pageTitle.includes(' - Discord')) {
+            const serverName = pageTitle.split(' - Discord')[0].trim();
+            if (serverName && !serverName.includes('#')) {
+                // チャンネル名部分を除去
+                const parts = serverName.split(' | ');
+                this.serverName = parts[parts.length - 1].trim();
+                console.log(`ページタイトルからサーバー名を推測: ${this.serverName}`);
+                return;
+            }
+        }
+        
+        // URLからギルドIDを取得してサーバー名として使用
+        const urlMatch = window.location.href.match(/https:\/\/discord\.com\/channels\/(\d+)/);
+        if (urlMatch) {
+            this.serverName = `Server-${urlMatch[1].slice(-4)}`; // 末尾4桁を使用
+            console.log(`URLからサーバーIDを使用: ${this.serverName}`);
+            return;
+        }
+        
+        this.serverName = 'Unknown Server';
+        console.log('サーバー名を検出できませんでした');
     }
 
     setupMutationObserver() {
@@ -69,17 +125,28 @@ class DiscordMessageForwarder {
     }
 
     findAllMessages() {
+        // より具体的で確実なメッセージ要素の検出
         const messageSelectors = [
-            '[class*="messageListItem"]',
-            '[id^="chat-messages-"]',
-            'li[class*="message"]',
-            '[role="article"]'
+            '[id^="chat-messages-"][data-list-item-id]', // 最も確実
+            '[class*="messageListItem"][id]',
+            '[class*="message"][id^="chat-messages"]',
+            'li[id^="chat-messages"]'
         ];
         
+        let allMessages = [];
         for (const selector of messageSelectors) {
             const messages = document.querySelectorAll(selector);
             if (messages.length > 0) {
                 console.log(`メッセージを${messages.length}件検出しました (selector: ${selector})`);
+                // 各メッセージ要素の詳細をログ出力
+                messages.forEach((msg, index) => {
+                    console.log(`メッセージ${index + 1}:`, {
+                        element: msg,
+                        id: msg.id,
+                        dataListItemId: msg.getAttribute('data-list-item-id'),
+                        textContent: msg.textContent?.substring(0, 50) + '...'
+                    });
+                });
                 return messages;
             }
         }
@@ -99,7 +166,11 @@ class DiscordMessageForwarder {
         const existingButton = messageElement.querySelector('.discord-webhook-button');
         if (existingButton) return;
 
-        const button = this.createForwardButton(messageElement, messageId);
+        // メッセージ要素にユニークな識別子を追加
+        const uniqueId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        messageElement.setAttribute('data-webhook-message-id', uniqueId);
+
+        const button = this.createForwardButton(messageElement, messageId, uniqueId);
         
         // 絶対位置指定でメッセージの右上に配置（空白行を作らない）
         button.className = 'discord-webhook-button discord-webhook-button-overlay';
@@ -110,6 +181,11 @@ class DiscordMessageForwarder {
     }
 
     getMessageId(messageElement) {
+        // メッセージ要素の情報をログ出力
+        console.log('メッセージID取得対象の要素:', messageElement);
+        console.log('要素のid:', messageElement.id);
+        console.log('要素のdata-list-item-id:', messageElement.getAttribute('data-list-item-id'));
+        
         // 複数の方法でメッセージIDを取得
         const idSources = [
             () => messageElement.getAttribute('data-list-item-id'),
@@ -128,9 +204,12 @@ class DiscordMessageForwarder {
             try {
                 const id = getIdFunc();
                 if (id) {
+                    console.log('取得したID:', id);
                     // data-list-item-idの場合は特別な処理
                     if (id.startsWith('chat-messages___')) {
-                        return id.replace('chat-messages___', '');
+                        const cleanId = id.replace('chat-messages___', '');
+                        console.log('クリーンアップ後のID:', cleanId);
+                        return cleanId;
                     }
                     return id;
                 }
@@ -139,21 +218,43 @@ class DiscordMessageForwarder {
             }
         }
         
-        // すべて失敗した場合はタイムスタンプベースのIDを生成
-        return `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        // すべて失敗した場合は要素のハッシュを生成
+        const elementText = messageElement.textContent || '';
+        const elementHash = elementText.substring(0, 50).replace(/\W/g, '');
+        const fallbackId = `generated-${elementHash}-${Date.now()}`;
+        console.log('フォールバックID:', fallbackId);
+        return fallbackId;
     }
 
-    createForwardButton(messageElement, messageId) {
+    createForwardButton(messageElement, messageId, uniqueId) {
         const button = document.createElement('button');
         button.className = 'discord-webhook-button';
         button.innerHTML = '📤';
         button.title = 'Send via Webhook';
         button.type = 'button';
+        
+        // ボタンにユニークIDを保存
+        button.dataset.messageId = messageId;
+        button.dataset.uniqueId = uniqueId;
 
         button.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.handleButtonClick(messageElement, messageId);
+            
+            const clickedButton = e.target;
+            const targetUniqueId = clickedButton.dataset.uniqueId;
+            
+            // ユニークIDを使って対応するメッセージ要素を検索
+            const actualMessageElement = document.querySelector(`[data-webhook-message-id="${targetUniqueId}"]`);
+            
+            if (actualMessageElement) {
+                console.log('ユニークIDで特定したメッセージ要素:', actualMessageElement);
+                console.log('メッセージ内容のプレビュー:', actualMessageElement.textContent?.substring(0, 100));
+                this.handleButtonClick(actualMessageElement, messageId);
+            } else {
+                console.log('ユニークIDでメッセージが見つからない、フォールバック使用:', messageElement);
+                this.handleButtonClick(messageElement, messageId);
+            }
         });
 
         return button;
@@ -175,20 +276,63 @@ class DiscordMessageForwarder {
     }
 
     extractMessageData(messageElement, messageId) {
-        // メッセージ内容の取得（複数の候補を試す）
-        let content = '';
-        const contentSelectors = [
-            '[class*="messageContent"]',
-            '[class*="markup"]',
-            '[data-slate-node="text"]',
-            '.markup'
-        ];
+        // このボタンがクリックされたメッセージ要素から直接データを取得
+        console.log('メッセージデータ抽出対象:', messageElement);
         
-        for (const selector of contentSelectors) {
-            const contentElement = messageElement.querySelector(selector);
-            if (contentElement && contentElement.textContent.trim()) {
-                content = contentElement.textContent.trim();
-                break;
+        // より詳細なメッセージ内容抽出
+        let content = '';
+        
+        // まず、すべてのmessageContentクラス要素を取得してログ出力
+        const allContentElements = messageElement.querySelectorAll('[class*="messageContent"]');
+        console.log('見つかったmessageContent要素数:', allContentElements.length);
+        allContentElements.forEach((elem, index) => {
+            console.log(`messageContent要素${index + 1}:`, elem.textContent?.trim());
+        });
+        
+        // 最後（最新）のmessageContent要素を使用
+        if (allContentElements.length > 0) {
+            const lastContentElement = allContentElements[allContentElements.length - 1];
+            content = lastContentElement.textContent?.trim() || '';
+            console.log('最新のメッセージ内容を使用:', content);
+        }
+        
+        // まだ空の場合は従来の方法
+        if (!content) {
+            const contentSelectors = [
+                '[class*="messageContent"]:last-child',
+                '[class*="markup"]:last-child',
+                '[data-slate-node="text"]:last-child'
+            ];
+            
+            for (const selector of contentSelectors) {
+                const contentElement = messageElement.querySelector(selector);
+                if (contentElement && contentElement.textContent && contentElement.textContent.trim()) {
+                    content = contentElement.textContent.trim();
+                    console.log(`フォールバック - メッセージ内容を取得 (${selector}):`, content);
+                    break;
+                }
+            }
+        }
+        
+        // それでも見つからない場合は、全テキストから抽出（改良版）
+        if (!content) {
+            const allText = messageElement.textContent || '';
+            const lines = allText.split('\n').filter(line => line.trim());
+            
+            // ユーザー名、時刻、ボタンなどを除外して実際のメッセージ内容を特定
+            const messageLines = lines.filter(line => {
+                const trimmed = line.trim();
+                return trimmed && 
+                       !trimmed.includes('📤') && 
+                       !trimmed.match(/^\d{1,2}:\d{2}\s*(AM|PM)?$/i) && // 時刻
+                       !trimmed.includes('@') && // ユーザー名らしきもの
+                       trimmed.length > 1 &&
+                       !trimmed.match(/^(今日|昨日|月曜日|火曜日|水曜日|木曜日|金曜日|土曜日|日曜日)$/); // 日付
+            });
+            
+            if (messageLines.length > 0) {
+                content = messageLines[messageLines.length - 1]; // 最後のメッセージらしき行を使用
+                console.log('全テキストから抽出したメッセージ:', content);
             }
         }
 
@@ -240,7 +384,8 @@ class DiscordMessageForwarder {
             author,
             timestamp,
             messageUrl,
-            messageId
+            messageId,
+            serverName: this.serverName || 'Unknown Server'
         };
     }
 

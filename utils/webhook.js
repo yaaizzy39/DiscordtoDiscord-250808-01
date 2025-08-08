@@ -56,15 +56,20 @@ class DiscordWebhookSender {
     }
 
     createWebhookPayload(messageData) {
-        const { content, messageUrl, author, timestamp } = messageData;
+        const { content, messageUrl, author, timestamp, serverName } = messageData;
         
         // メッセージ内容を検証・クリーンアップ
         const cleanContent = content && content.trim() ? content.trim() : "_メッセージ本文を取得できませんでした_";
         const cleanAuthor = author && author.trim() ? author.trim() : "Unknown User";
+        const cleanServerName = serverName && serverName.trim() ? serverName.trim() : "Unknown Server";
+        
+        // サーバー名を含む形でメッセージを構成
+        const serverPrefix = `【${cleanServerName}】\n`;
+        const contentWithServer = serverPrefix + cleanContent;
         
         const embed = {
             title: "Forwarded Discord Message",
-            description: cleanContent.length > 4096 ? cleanContent.substring(0, 4093) + "..." : cleanContent,
+            description: contentWithServer.length > 4096 ? contentWithServer.substring(0, 4093) + "..." : contentWithServer,
             color: 0x7289da,
             footer: {
                 text: "Shared via Chrome Extension"
@@ -100,7 +105,7 @@ class DiscordWebhookSender {
         }
 
         return {
-            content: cleanContent.length > 2000 ? cleanContent.substring(0, 1997) + "..." : cleanContent,
+            content: contentWithServer.length > 2000 ? contentWithServer.substring(0, 1997) + "..." : contentWithServer,
             embeds: [embed]
         };
     }
