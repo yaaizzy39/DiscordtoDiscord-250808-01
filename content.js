@@ -13,6 +13,15 @@ class DiscordMessageForwarder {
         await this.webhookSender.init();
         this.detectCurrentUser();
         this.detectServerName();
+        
+        // 初回検出後、少し待ってから再度試行（DOMが完全に読み込まれていない場合がある）
+        setTimeout(() => {
+            if (this.serverName === 'Unknown Server') {
+                console.log('初回検出に失敗、再度サーバー名検出を実行...');
+                this.detectServerName();
+            }
+        }, 2000);
+        
         this.processExistingMessages();
         this.setupMutationObserver();
     }
@@ -38,53 +47,125 @@ class DiscordMessageForwarder {
     }
 
     detectServerName() {
-        // より具体的なサーバー名検出方法
+        console.log('サーバー名検出を開始...');
+        
+        // より詳細で確実なサーバー名検出方法
         const serverNameSelectors = [
-            // サイドバーの最上部にあるサーバー名
-            '[class*="sidebar"] [class*="name"]',
-            '[class*="guildSidebar"] [class*="name"]',
-            // ヘッダー部分のサーバー名
-            'h1[class*="name"]',
-            '[class*="title"][class*="name"]',
-            // サーバーアイコンの隣のテキスト
-            '[class*="guildIcon"] + [class*="name"]',
-            // サーバー選択ドロップダウン
+            // Discordの新UIでのサーバー名検出
+            '[class*="sidebar"] [class*="headerContent"] [class*="name"]',
+            '[class*="sidebar"] h1',
+            // サーバー設定などでのサーバー名
+            '[class*="guild"] [class*="name"]',
             '[class*="guildName"]',
             '[class*="serverName"]',
+            // より広範囲な検索
+            'h1[class*="name"][class*="title"]',
+            '[class*="headerBar"] [class*="name"]',
+            '[class*="guildHeader"] [class*="name"]'
         ];
         
+        // 各セレクタを試して詳細をログ出力
         for (const selector of serverNameSelectors) {
-            const element = document.querySelector(selector);
-            if (element && element.textContent && element.textContent.trim()) {
-                const serverName = element.textContent.trim();
-                // 明らかにサーバー名でないものを除外
-                if (!serverName.includes('チャンネル') && !serverName.includes('channel') && serverName.length > 1) {
+            const elements = document.querySelectorAll(selector);
+            console.log(`セレクタ "${selector}" で見つかった要素数: ${elements.length}`);
+            
+            elements.forEach((element, index) => {
+                const text = element.textContent?.trim();
+                console.log(`  要素${index + 1}: "${text}"`);
+                
+                if (text && text.length > 1) {
+                    // 明らかにサーバー名でないものを除外
+                    if (!text.includes('チャンネル') && 
+                        !text.includes('channel') && 
+                        !text.includes('#') &&
+                        !text.includes('@') &&
+                        !text.match(/^\d+$/) && // 数字のみではない
+                        !text.match(/^\d{1,2}:\d{2}/) && // 時刻形式ではない
+                        text !== 'Discord' &&
+                        text.length < 100 // 長すぎない
+                    ) {
+                        this.serverName = text;
+                        console.log(`サーバー名を検出しました: "${this.serverName}" (セレクタ: ${selector})`);
+                        return;
+                    }
+                }
+            });
+            
+            // 見つかった場合はここで終了
+            if (this.serverName && this.serverName !== 'Unknown Server') {
+                return;
+            }
+        }
+        
+        // ページタイトルから詳細に解析
+        const pageTitle = document.title;
+        console.log('ページタイトル:', pageTitle);
+        
+        if (pageTitle && pageTitle !== 'Discord') {
+            // パターン1: "チャンネル名 | サーバー名 - Discord"
+            if (pageTitle.includes(' | ') && pageTitle.includes(' - Discord')) {
+                const parts = pageTitle.split(' - Discord')[0].split(' | ');
+                if (parts.length >= 2) {
+                    this.serverName = parts[parts.length - 1].trim();
+                    console.log(`ページタイトルからサーバー名を抽出 (パターン1): "${this.serverName}"`);
+                    return;
+                }
+            }
+            
+            // パターン2: "サーバー名 - Discord"
+            if (pageTitle.includes(' - Discord')) {
+                const serverName = pageTitle.split(' - Discord')[0].trim();
+                if (serverName && !serverName.includes('#')) {
                     this.serverName = serverName;
-                    console.log(`サーバー名を検出しました: ${this.serverName}`);
+                    console.log(`ページタイトルからサーバー名を抽出 (パターン2): "${this.serverName}"`);
                     return;
                 }
             }
         }
         
-        // ページタイトルからサーバー名を推測（改良版）
-        const pageTitle = document.title;
-        if (pageTitle && pageTitle.includes(' - Discord')) {
-            const serverName = pageTitle.split(' - Discord')[0].trim();
-            if (serverName && !serverName.includes('#')) {
-                // チャンネル名部分を除去
-                const parts = serverName.split(' | ');
-                this.serverName = parts[parts.length - 1].trim();
-                console.log(`ページタイトルからサーバー名を推測: ${this.serverName}`);
-                return;
-            }
-        }
+        // より確実なサーバー名検出：ブラウザのタブタイトルから直接取得
+        let attempts = 0;
+        const maxAttempts = 5;
         
-        // URLからギルドIDを取得してサーバー名として使用
-        const urlMatch = window.location.href.match(/https:\/\/discord\.com\/channels\/(\d+)/);
-        if (urlMatch) {
-            this.serverName = `Server-${urlMatch[1].slice(-4)}`; // 末尾4桁を使用
-            console.log(`URLからサーバーIDを使用: ${this.serverName}`);
-            return;
+        const tryExtractFromTitle = () => {
+            const title = document.title;
+            console.log(`試行${attempts + 1}: ページタイトル = "${title}"`);
+            
+            // パターン: "#チャンネル名 | サーバー名 - Discord"
+            if (title.includes(' | ') && title.includes(' - Discord')) {
+                const beforeDiscord = title.split(' - Discord')[0];
+                const parts = beforeDiscord.split(' | ');
+                if (parts.length >= 2) {
+                    // 最後の部分がサーバー名
+                    const serverName = parts[parts.length - 1].trim();
+                    if (serverName.length > 0 && !serverName.startsWith('#')) {
+                        this.serverName = serverName;
+                        console.log(`タイトルから確実なサーバー名を検出: "${this.serverName}"`);
+                        return true;
+                    }
+                }
+            }
+            
+            // パターン: "サーバー名 - Discord" (チャンネル名がない場合)
+            if (title.includes(' - Discord') && !title.includes(' | ')) {
+                const serverName = title.split(' - Discord')[0].trim();
+                if (serverName.length > 0 && serverName !== 'Discord') {
+                    this.serverName = serverName;
+                    console.log(`タイトルから簡易サーバー名を検出: "${this.serverName}"`);
+                    return true;
+                }
+            }
+            
+            return false;
+        };
+        
+        // タイトルから検出を試行（ページが完全に読み込まれるまで少し待つ）
+        if (!tryExtractFromTitle()) {
+            setTimeout(() => {
+                if (this.serverName === 'Unknown Server') {
+                    tryExtractFromTitle();
+                }
+            }, 1000);
         }
         
         this.serverName = 'Unknown Server';
@@ -262,6 +343,12 @@ class DiscordMessageForwarder {
 
     async handleButtonClick(messageElement, messageId) {
         try {
+            // サーバー名が不明の場合は再検出を試行
+            if (!this.serverName || this.serverName === 'Unknown Server') {
+                console.log('サーバー名が不明のため再検出を実行...');
+                this.detectServerName();
+            }
+
             const messageData = this.extractMessageData(messageElement, messageId);
 
             this.showLoadingIndicator(messageElement);
@@ -336,20 +423,61 @@ class DiscordMessageForwarder {
             }
         }
 
-        // 著者名の取得（複数の候補を試す）
+        // 著者名の取得（リプライメッセージを考慮した改良版）
         let author = 'Unknown User';
-        const authorSelectors = [
-            '[class*="username"]',
-            '[class*="author"]',
-            'h3[class*="header"] span',
-            '.username'
-        ];
         
-        for (const selector of authorSelectors) {
-            const authorElement = messageElement.querySelector(selector);
-            if (authorElement && authorElement.textContent.trim()) {
-                author = authorElement.textContent.trim();
-                break;
+        // リプライメッセージかどうかを判定
+        const isReply = messageElement.querySelector('[class*="repliedMessage"]') || 
+                       messageElement.querySelector('[class*="replyBar"]') ||
+                       messageElement.querySelector('[class*="reply"]');
+        
+        if (isReply) {
+            console.log('リプライメッセージを検出しました');
+            
+            // リプライメッセージの場合、リプライ部分を除外した実際の投稿者を探す
+            const authorSelectors = [
+                // リプライ部分を除外した投稿者名を取得
+                '[class*="messageContent"] ~ [class*="header"] [class*="username"]',
+                '[class*="contents"] > [class*="header"] [class*="username"]',
+                // より具体的な検索
+                '[class*="header"]:not([class*="reply"]) [class*="username"]',
+                // フォールバック
+                '[class*="username"]:not([class*="reply"])'
+            ];
+            
+            for (const selector of authorSelectors) {
+                const authorElements = messageElement.querySelectorAll(selector);
+                console.log(`リプライ用セレクタ "${selector}" で見つかった要素数:`, authorElements.length);
+                
+                // 最後の要素（実際の投稿者）を使用
+                if (authorElements.length > 0) {
+                    const lastAuthorElement = authorElements[authorElements.length - 1];
+                    const authorText = lastAuthorElement.textContent?.trim();
+                    console.log(`候補著者名: "${authorText}"`);
+                    
+                    if (authorText && authorText.length > 0) {
+                        author = authorText;
+                        console.log(`リプライメッセージの実際の投稿者: "${author}"`);
+                        break;
+                    }
+                }
+            }
+        } else {
+            // 通常のメッセージの場合
+            const authorSelectors = [
+                '[class*="username"]',
+                '[class*="author"]',
+                'h3[class*="header"] span',
+                '.username'
+            ];
+            
+            for (const selector of authorSelectors) {
+                const authorElement = messageElement.querySelector(selector);
+                if (authorElement && authorElement.textContent.trim()) {
+                    author = authorElement.textContent.trim();
+                    console.log(`通常メッセージの投稿者: "${author}"`);
+                    break;
+                }
             }
         }
 

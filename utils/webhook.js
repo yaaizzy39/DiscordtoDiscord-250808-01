@@ -63,13 +63,14 @@ class DiscordWebhookSender {
         const cleanAuthor = author && author.trim() ? author.trim() : "Unknown User";
         const cleanServerName = serverName && serverName.trim() ? serverName.trim() : "Unknown Server";
         
-        // サーバー名を含む形でメッセージを構成
-        const serverPrefix = `【${cleanServerName}】\n`;
-        const contentWithServer = serverPrefix + cleanContent;
+        // サーバー名と送信者名を含む形でメッセージを構成
+        const serverPrefix = `【${cleanServerName}】`;
+        const authorPrefix = `**${cleanAuthor}**`;
+        const contentWithPrefix = `${serverPrefix}\n${authorPrefix}\n${cleanContent}`;
         
         const embed = {
             title: "Forwarded Discord Message",
-            description: contentWithServer.length > 4096 ? contentWithServer.substring(0, 4093) + "..." : contentWithServer,
+            description: contentWithPrefix.length > 4096 ? contentWithPrefix.substring(0, 4093) + "..." : contentWithPrefix,
             color: 0x7289da,
             footer: {
                 text: "Shared via Chrome Extension"
@@ -105,7 +106,7 @@ class DiscordWebhookSender {
         }
 
         return {
-            content: contentWithServer.length > 2000 ? contentWithServer.substring(0, 1997) + "..." : contentWithServer,
+            content: contentWithPrefix.length > 2000 ? contentWithPrefix.substring(0, 1997) + "..." : contentWithPrefix,
             embeds: [embed]
         };
     }
