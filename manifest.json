@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "DiscordToWebhookExtension",
+  "version": "1.0.0",
+  "description": "Discordの各メッセージにボタンを追加し、Webhook経由で転送する拡張機能",
+  
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  
+  "host_permissions": [
+    "https://discord.com/channels/*",
+    "https://discordapp.com/api/webhooks/*",
+    "https://discord.com/api/webhooks/*"
+  ],
+  
+  "content_scripts": [
+    {
+      "matches": ["https://discord.com/channels/*"],
+      "js": ["utils/webhook.js", "content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "DiscordToWebhook Settings"
+  },
+  
+  "background": {
+    "service_worker": "background.js"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["utils/webhook.js"],
+      "matches": ["https://discord.com/*"]
+    }
+  ]
+}

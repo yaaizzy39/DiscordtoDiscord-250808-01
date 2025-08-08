@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>DiscordToWebhook Settings</title>
+    <style>
+        body {
+            width: 350px;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            margin: 0;
+        }
+        
+        h2 {
+            color: #7289da;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input[type="url"] {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+        
+        input[type="url"]:focus {
+            border-color: #7289da;
+            outline: none;
+        }
+        
+        button {
+            background-color: #7289da;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background-color: #677bc4;
+        }
+        
+        .status {
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h2>🚀 Discord Webhook Settings</h2>
+    
+    <label for="webhookUrl">Webhook URL:</label>
+    <input type="url" id="webhookUrl" placeholder="https://discord.com/api/webhooks/...">
+    
+    <button id="saveButton">保存</button>
+    <button id="testButton">テスト送信</button>
+    
+    <div id="status" class="status" style="display: none;"></div>
+    
+    <div class="info">
+        <strong>使用方法:</strong><br>
+        1. Discord Webhookを作成<br>
+        2. Webhook URLをここに入力・保存<br>
+        3. discord.com/channels/ でメッセージ横のボタンをクリック
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
